@@ -1,0 +1,52 @@
+apiVersion: apiextensions.crossplane.io/v1
+kind: Composition
+metadata:
+  name: s3-secure-standard
+  labels:
+    crossplane.io/xrd: xsecurebuckets.yagnesh.cloud
+    provider: aws
+spec:
+  writeConnectionSecretsToNamespace: crossplane-system
+  compositeTypeRef:
+    apiVersion: yagnesh.cloud/v1alpha1
+    kind: XSecureBucket
+  mode: Pipeline
+  pipeline:
+    - step: patch-and-transform
+      functionRef:
+        name: function-patch-and-transform
+      input:
+        apiVersion: pt.fn.crossplane.io/v1beta1
+        kind: Resources
+        resources:
+          - name: storage-bucket
+            base:
+              apiVersion: s3.aws.upbound.io/v1beta1
+              kind: Bucket
+              spec:
+                forProvider:
+                  tags:
+                    Environment: "Production"
+                    Compliance: "High"
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: "spec.parameters.region"
+                toFieldPath: "spec.forProvider.region"
+              - type: FromCompositeFieldPath
+                fromFieldPath: "spec.parameters.tags"
+                toFieldPath: "spec.forProvider.tags"
+          - name: sse-config
+            base:
+              apiVersion: s3.aws.upbound.io/v1beta1
+              kind: BucketServerSideEncryptionConfiguration
+              spec:
+                forProvider:
+                  bucketSelector:
+                    matchControllerRef: true
+                  rule:
+                    - applyServerSideEncryptionByDefault:
+                      -  sseAlgorithm: AES256
+            patches:
+              - type: FromCompositeFieldPath
+                fromFieldPath: "spec.parameters.region"
+                toFieldPath: "spec.forProvider.region"
